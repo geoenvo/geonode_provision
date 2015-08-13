@@ -1,0 +1,193 @@
+---
+- hosts: default
+  sudo: yes
+
+  vars:
+    geonode_dir: '/var/www/geonode'
+    my_geonode: '/var/www/my_geonode'
+
+
+  handlers:
+
+    - name: restart apache
+      service: name=apache2 state=restarted
+
+    - name: restart tomcat
+      service: name=tomcat7 state=restarted
+
+  tasks:
+
+    - name: Import WebUpd8 PGP key
+      apt_key: keyserver=keyserver.ubuntu.com id=0xEEA14886 state=present
+
+    - name: Add oracle java repo
+      apt_repository: repo='ppa:webupd8team/java'
+
+    - name: automatically accept the Oracle license
+      debconf: name="oracle-java7-installer" question='shared/accepted-oracle-license-v1-1' value='true' vtype='select'
+
+    - name: Installing system packages
+      apt: pkg={{item}} state=present
+      with_items:
+        - postgresql-9.3
+        - postgresql-contrib-9.3
+        - build-essential
+        - postgresql-server-dev-9.3
+        - libxml2-dev
+        - libproj-dev
+        - libjson0-dev
+        - xsltproc
+        - docbook-xsl
+        - docbook-mathml
+        - libgdal1-dev
+        - python-pip
+        - python-dev
+        - python
+        - python-support
+        - python-virtualenv
+        - oracle-java7-installer
+        - tomcat7
+        - gcc
+        - patch
+        - zip
+        - python-imaging
+        - gdal-bin
+        - libgeos-dev
+        - python-urlgrabber
+        - python-pastescript
+        - gettext
+        - libpq-dev
+        - unzip
+        - libjpeg-dev
+        - libpng-dev
+        - python-gdal
+        - libproj-dev
+        - python-psycopg2
+        - apache2
+        - libapache2-mod-wsgi
+        - git-core
+        - gettext
+        - libxml2-dev
+        - libxslt-dev
+
+    - name: Enable and start postgresql
+      service: name=postgresql enabled=yes state=started
+
+    - name: install JDK
+      apt: pkg="oracle-java7-installer" state=present
+
+    - name: set this as default Java; also environment variables
+      apt: pkg="oracle-java7-set-default" state=present
+
+    - name: Installing psycopg for ansible
+      pip: name=psycopg2 state=present
+
+    - name: Creating geonode DB
+      postgresql_user: name=geonode password=geonode role_attr_flags=CREATEDB,NOSUPERUSER
+      sudo_user: postgres
+
+    - name: Downloading geos
+      get_url: url=http://download.osgeo.org/geos/geos-3.4.2.tar.bz2 dest=/usr/src/geos.tar.bz2 force=no
+
+    - name: Extracting geos      
+      unarchive: src=/usr/src/geos.tar.bz2
+             dest=/usr/src/
+             copy=no
+
+    - name: Downloading postgis
+      get_url: url=http://download.osgeo.org/postgis/source/postgis-2.1.5.tar.gz dest=/usr/src/postgis.tar.gz force=no
+
+    - name: Extracting postgis
+      unarchive: src=/usr/src/postgis.tar.gz
+             dest=/usr/src/
+             copy=no
+
+    - name: Checking geos-config
+      stat: path=/usr/local/bin/geos-config
+      register: geos
+
+    - name: Installing geos
+      shell: ./configure && make && sudo make install chdir=/usr/src/geos-3.4.2
+      when: not geos.stat.exists
+
+    - name: Installing postgis
+      shell: ./configure && make && sudo make install chdir=/usr/src/postgis-2.1.5
+
+    - name: Installing postgis shit again
+      shell: sudo ldconfig && sudo make comments-install chdir=/usr/src/postgis-2.1.5
+
+    - name: Creating geonode db
+      postgresql_db: name=geonode owner=geonode
+      sudo_user: postgres
+
+    - name: Creating geonode-imports db
+      postgresql_db: name=geonode-imports owner=geonode
+      sudo_user: postgres
+
+    - name: Postgis geonode-imports
+      command: psql -f /usr/share/postgresql/9.3/contrib/postgis-2.1/postgis.sql geonode-imports
+      sudo_user: postgres
+
+    - name: Spatial_ref_sys geonode-imports
+      command: psql -f /usr/share/postgresql/9.3/contrib/postgis-2.1/spatial_ref_sys.sql geonode-imports
+      sudo_user: postgres
+
+    - name: Granting privs on some geonode-imports
+      postgresql_privs: db=geonode-imports privs=ALL type=table objs=geometry_columns,spatial_ref_sys roles=PUBLIC
+      sudo_user: postgres
+
+    - name: Enabling postgis extension
+      postgresql_ext: name=postgis db=geonode
+      sudo_user: postgres
+
+    - name: Disabling apache default site
+      command: a2dissite 000-default.conf
+
+    - name: Enabling apache wsgi
+      apache2_module: name=wsgi
+
+    - name: Enabling apache proxy
+      apache2_module: name=proxy_http
+
+    - name: Copying geonode apache config
+      copy: src=files/geonode.conf dest=/etc/apache2/sites-available/geonode.conf
+
+    - name: Enabling geonode on apache
+      command: a2ensite geonode
+      notify: restart apache
+
+    - name: Geonode pip install
+      command: pip --default-timeout=100 install -e . chdir={{ geonode_dir }}
+
+    - name: Geonode paver setup
+      command: paver setup chdir={{ geonode_dir }}
+
+    - name: Geoserver deploy
+      command: cp "{{ geonode_dir }}/downloaded/geoserver.war" /var/lib/tomcat7/webapps/
+
+    - name: Create web-inf dir
+      file: path=/var/lib/tomcat7/webapps/geoserver/WEB-INF/ state=directory
+
+    - name: Modifying geonode base url
+      copy: src=files/web.xml dest=/var/lib/tomcat7/webapps/geoserver/WEB-INF/web.xml backup=yes
+
+    - name: Create auth dir
+      file: path=/var/lib/tomcat7/webapps/geoserver/data/security/auth/geonodeAuthProvider state=directory
+
+    - name: Adjusting geonode auth base url
+      copy: src=files/auth_config.xml dest=/var/lib/tomcat7/webapps/geoserver/data/security/auth/geonodeAuthProvider/config.xml
+
+    - name: Java shit
+      shell: export CATALINA_OPTS="$CATALINA_OPTS -Xms1g -Xmx1g -XX:MaxPermSize=256M -XX:CompileCommand=exclude,net/sf/saxon/event/ReceivingContentHandler.startEvent"
+
+    - name: Overriding tomcat settings
+      copy: src=files/server.xml dest=/etc/tomcat7/server.xml
+
+    - name: Create dns config dir
+      file: path=/var/lib/tomcat7/webapps/geoserver/data/printing state=directory
+
+    - name: Overriding dns match on geoserver config
+      copy: src=files/printing_config.yaml dest=/var/lib/tomcat7/webapps/geoserver/data/printing/config.yaml
+      notify:
+      - restart tomcat
+      - restart apache

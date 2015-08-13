@@ -1,0 +1,63 @@
+    - name: Updating apt
+      apt: update_cache=yes
+
+
+
+
+
+    - name: pg_hba.conf
+      copy: src=files/pg_hba.conf dest=/etc/postgresql/9.3/main/pg_hba.conf backup=yes owner=postgres group=postgres mode=0640
+      register: pg_hba
+
+    - name: postgresql.conf
+      copy: src=files/postgresql.conf dest=/etc/postgresql/9.3/main/postgresql.conf backup=yes owner=postgres group=postgres mode=0640
+      register: pg_conf
+
+    - name: restart postgresql
+      service: name=postgresql state=reloaded
+      when: pg_hba.changed or pg_conf.changed
+
+
+
+    - name: Copying local_settings
+      copy: src=files/local_settings.py dest={{ geonode_dir }}/geonode/local_settings.py
+
+    - name: Download geonode template
+      get_url: url=https://github.com/simod/geonode-project/archive/2.4.zip dest=/usr/src/geo_template.zip force=no
+
+    - name: My geonode creation
+      shell: django-admin.py startproject my_geonode --template=/usr/src/geo_template.zip -epy,rst chdir=/var/www
+
+    - name: My geonode dependency
+      shell: name=pip install -e .
+
+    - name: Getting my geonode settings
+      command: cp {{ geonode_dir }}/geonode/local_settings.py  {{ my_geonode }}/my_geonode
+
+    - name: Django syncdb
+      django_manage: command="syncdb --noinput" app_path={{ my_geonode }}
+
+    - name: Django superuser
+      django_manage: command="createsuperuser --noinput --username=admin --email=admin@example.com" app_path={{ my_geonode }}
+
+    - name: Django fixsitename
+      django_manage: command=fixsitename app_path={{ my_geonode }}
+
+    - name: Django collectstatic
+      django_manage: command="collectstatic --noinput" app_path={{ my_geonode }}
+
+    - name: Django start
+      command: name=paver start  chdir={{ geonode_dir }}
+
+
+
+
+
+    - name: Create static directory
+      file: path={{ geonode_dir }}/geonode/static/ state=directory owner=www-data group=www-data mode=0775
+
+    - name: Create uploaded directory
+      file: path={{ geonode_dir }}/geonode/uploaded/ state=directory owner=www-data group=www-data mode=0775
+
+    - name: Create static root directory
+      file: path={{ geonode_dir }}/geonode/static_root/ state=directory owner=www-data group=www-data mode=0775
