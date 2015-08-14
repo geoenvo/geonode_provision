@@ -26,6 +26,9 @@
     - name: automatically accept the Oracle license
       debconf: name="oracle-java7-installer" question='shared/accepted-oracle-license-v1-1' value='true' vtype='select'
 
+    - name: Updating apt
+      apt: update_cache=yes
+
     - name: Installing system packages
       apt: pkg={{item}} state=present
       with_items:
@@ -150,7 +153,7 @@
       apache2_module: name=proxy_http
 
     - name: Copying geonode apache config
-      copy: src=files/geonode.conf dest=/etc/apache2/sites-available/geonode.conf
+      copy: src=configs/geonode.conf dest=/etc/apache2/sites-available/geonode.conf
 
     - name: Enabling geonode on apache
       command: a2ensite geonode
@@ -169,25 +172,25 @@
       file: path=/var/lib/tomcat7/webapps/geoserver/WEB-INF/ state=directory
 
     - name: Modifying geonode base url
-      copy: src=files/web.xml dest=/var/lib/tomcat7/webapps/geoserver/WEB-INF/web.xml backup=yes
+      copy: src=configs/web.xml dest=/var/lib/tomcat7/webapps/geoserver/WEB-INF/web.xml backup=yes
 
     - name: Create auth dir
       file: path=/var/lib/tomcat7/webapps/geoserver/data/security/auth/geonodeAuthProvider state=directory
 
     - name: Adjusting geonode auth base url
-      copy: src=files/auth_config.xml dest=/var/lib/tomcat7/webapps/geoserver/data/security/auth/geonodeAuthProvider/config.xml
+      copy: src=configs/auth_config.xml dest=/var/lib/tomcat7/webapps/geoserver/data/security/auth/geonodeAuthProvider/config.xml
 
     - name: Java shit
       shell: export CATALINA_OPTS="$CATALINA_OPTS -Xms1g -Xmx1g -XX:MaxPermSize=256M -XX:CompileCommand=exclude,net/sf/saxon/event/ReceivingContentHandler.startEvent"
 
     - name: Overriding tomcat settings
-      copy: src=files/server.xml dest=/etc/tomcat7/server.xml
+      copy: src=configs/server.xml dest=/etc/tomcat7/server.xml
 
     - name: Create dns config dir
       file: path=/var/lib/tomcat7/webapps/geoserver/data/printing state=directory
 
     - name: Overriding dns match on geoserver config
-      copy: src=files/printing_config.yaml dest=/var/lib/tomcat7/webapps/geoserver/data/printing/config.yaml
+      copy: src=configs/printing_config.yaml dest=/var/lib/tomcat7/webapps/geoserver/data/printing/config.yaml
       notify:
       - restart tomcat
       - restart apache
