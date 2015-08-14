@@ -76,6 +76,18 @@
     - name: Enable and start postgresql
       service: name=postgresql enabled=yes state=started
 
+    - name: pg_hba.conf
+      copy: src=configs/pg/pg_hba.conf dest=/etc/postgresql/9.3/main/pg_hba.conf backup=yes owner=postgres group=postgres mode=0640
+      register: pg_hba
+
+    - name: postgresql.conf
+      copy: src=configs/pg/postgresql.conf dest=/etc/postgresql/9.3/main/postgresql.conf backup=yes owner=postgres group=postgres mode=0640
+      register: pg_conf
+
+    - name: restart postgresql
+      service: name=postgresql state=reloaded
+      when: pg_hba.changed or pg_conf.changed
+
     - name: install JDK
       apt: pkg="oracle-java7-installer" state=present
 
@@ -109,15 +121,21 @@
       stat: path=/usr/local/bin/geos-config
       register: geos
 
+    - name: Checking postgis version
+      shell: PGPASSWORD=geonode psql -U geonode -d geonode -c  "SELECT substring(PostGIS_Version() from 1 for 3)"
+      register: postgis
+
     - name: Installing geos
       shell: ./configure && make && sudo make install chdir=/usr/src/geos-3.4.2
       when: not geos.stat.exists
 
     - name: Installing postgis
       shell: ./configure && make && sudo make install chdir=/usr/src/postgis-2.1.5
+      when: postgis.stdout
 
     - name: Installing postgis shit again
       shell: sudo ldconfig && sudo make comments-install chdir=/usr/src/postgis-2.1.5
+      when: not postgis.stdout
 
     - name: Creating geonode db
       postgresql_db: name=geonode owner=geonode
@@ -172,19 +190,19 @@
       file: path=/var/lib/tomcat7/webapps/geoserver/WEB-INF/ state=directory
 
     - name: Modifying geonode base url
-      copy: src=configs/web.xml dest=/var/lib/tomcat7/webapps/geoserver/WEB-INF/web.xml backup=yes
+      copy: src=configs/java/web.xml dest=/var/lib/tomcat7/webapps/geoserver/WEB-INF/web.xml backup=yes
 
     - name: Create auth dir
       file: path=/var/lib/tomcat7/webapps/geoserver/data/security/auth/geonodeAuthProvider state=directory
 
     - name: Adjusting geonode auth base url
-      copy: src=configs/auth_config.xml dest=/var/lib/tomcat7/webapps/geoserver/data/security/auth/geonodeAuthProvider/config.xml
+      copy: src=configs/java/auth_config.xml dest=/var/lib/tomcat7/webapps/geoserver/data/security/auth/geonodeAuthProvider/config.xml
 
     - name: Java shit
       shell: export CATALINA_OPTS="$CATALINA_OPTS -Xms1g -Xmx1g -XX:MaxPermSize=256M -XX:CompileCommand=exclude,net/sf/saxon/event/ReceivingContentHandler.startEvent"
 
     - name: Overriding tomcat settings
-      copy: src=configs/server.xml dest=/etc/tomcat7/server.xml
+      copy: src=configs/java/server.xml dest=/etc/tomcat7/server.xml
 
     - name: Create dns config dir
       file: path=/var/lib/tomcat7/webapps/geoserver/data/printing state=directory

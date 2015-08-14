@@ -1,22 +1,3 @@
-
-
-
-
-
-    - name: pg_hba.conf
-      copy: src=files/pg_hba.conf dest=/etc/postgresql/9.3/main/pg_hba.conf backup=yes owner=postgres group=postgres mode=0640
-      register: pg_hba
-
-    - name: postgresql.conf
-      copy: src=files/postgresql.conf dest=/etc/postgresql/9.3/main/postgresql.conf backup=yes owner=postgres group=postgres mode=0640
-      register: pg_conf
-
-    - name: restart postgresql
-      service: name=postgresql state=reloaded
-      when: pg_hba.changed or pg_conf.changed
-
-
-
     - name: Copying local_settings
       copy: src=files/local_settings.py dest={{ geonode_dir }}/geonode/local_settings.py
 
