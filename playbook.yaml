@@ -163,6 +163,8 @@
       postgresql_ext: name=postgis db=geonode
       sudo_user: postgres
 
+
+
     - name: Disabling apache default site
       command: a2dissite 000-default.conf
 
@@ -174,10 +176,12 @@
 
     - name: Copying geonode apache config
       copy: src=configs/geonode.conf dest=/etc/apache2/sites-available/geonode.conf
+      notify: restart apache
 
     - name: Enabling geonode on apache
       command: a2ensite geonode
       notify: restart apache
+
 
     - name: Geonode pip install
       command: pip --default-timeout=100 install -e . chdir={{ geonode_dir }}
@@ -191,41 +195,51 @@
     - name: My geonode pip install
       command: pip --default-timeout=100 install -e . chdir={{ my_geonode }}
 
+
+
     - name: Create web-inf dir
       file: path=/var/lib/tomcat7/webapps/geoserver/WEB-INF/ state=directory
 
     - name: Modifying geonode base url
       copy: src=configs/java/web.xml dest=/var/lib/tomcat7/webapps/geoserver/WEB-INF/web.xml backup=yes
+      notify: restart tomcat
 
     - name: Create auth dir
       file: path=/var/lib/tomcat7/webapps/geoserver/data/security/auth/geonodeAuthProvider state=directory
 
     - name: Adjusting geonode auth base url
       copy: src=configs/java/auth_config.xml dest=/var/lib/tomcat7/webapps/geoserver/data/security/auth/geonodeAuthProvider/config.xml
+      notify: restart tomcat
 
     - name: Java shit
       shell: export CATALINA_OPTS="$CATALINA_OPTS -Xms1g -Xmx1g -XX:MaxPermSize=256M -XX:CompileCommand=exclude,net/sf/saxon/event/ReceivingContentHandler.startEvent"
 
     - name: Overriding tomcat settings
       copy: src=configs/java/server.xml dest=/etc/tomcat7/server.xml
+      notify: restart tomcat
 
     - name: Create dns config dir
       file: path=/var/lib/tomcat7/webapps/geoserver/data/printing state=directory
 
     - name: Overriding dns match on geoserver config
       copy: src=configs/printing_config.yaml dest=/var/lib/tomcat7/webapps/geoserver/data/printing/config.yaml
+      notify: restart tomcat
+
+
+
 
     - name: geonode local settings
       copy: src=configs/django/local_settings.py dest={{ geonode_dir }}/geonode owner=www-data group=www-data mode=0640
+      notify: restart apache
 
     - name: my_geonode local settings
       copy: src=configs/django/my_local_settings.py dest={{ my_geonode}}/my_geonode owner=www-data group=www-data mode=0640
+      notify: restart apache
+      
 
     - name: my_geonode settings
       command: cp "{{ geonode_dir }}/geonode/settings.py" "{{ my_geonode }}/my_geonode"
-      notify:
-      - restart tomcat
-      - restart apache
+      notify: restart apache
 
     - name: Django syncdb
       django_manage: command="syncdb --noinput" app_path={{ my_geonode }}
