@@ -1,1 +1,0 @@
-from geonode.settings import *

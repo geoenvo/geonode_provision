@@ -99,7 +99,7 @@
 
 
     - name: Creating geonode DB
-      postgresql_user: name=geonode password=geonode role_attr_flags=CREATEDB,NOSUPERUSER
+      postgresql_user: name=geonode password=password role_attr_flags=CREATEDB,NOSUPERUSER
       sudo_user: postgres
 
     - name: Creating geonode-imports db
@@ -129,7 +129,7 @@
       register: geos
 
     - name: Checking postgis version
-      shell: PGPASSWORD=geonode psql -U geonode -c  "SELECT substring(PostGIS_Version() from 1 for 3)"
+      shell: PGPASSWORD=password psql -U geonode -c  "SELECT substring(PostGIS_Version() from 1 for 3)"
       ignore_errors: yes
       register: postgis
 
@@ -233,12 +233,7 @@
       notify: restart apache
 
     - name: my_geonode local settings
-      copy: src=configs/django/my_local_settings.py dest={{ my_geonode}}/my_geonode owner=www-data group=www-data mode=0640
-      notify: restart apache
-      
-
-    - name: my_geonode settings
-      command: cp "{{ geonode_dir }}/geonode/settings.py" "{{ my_geonode }}/my_geonode"
+      command: cp {{ my_geonode }}/my_geonode/local_settings.py.sample {{ my_geonode}}/my_geonode/local_settings.py
       notify: restart apache
 
     - name: Django syncdb
@@ -246,6 +241,7 @@
 
     - name: Django superuser
       django_manage: command="createsuperuser --noinput --username=admin --email=admin@example.com" app_path={{ my_geonode }}
+      ignore_errors: yes
 
     - name: Django fixsitename
       django_manage: command=fixsitename app_path={{ my_geonode }}
