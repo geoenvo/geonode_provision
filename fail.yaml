@@ -1,6 +1,0 @@
-
-
-    - name: Django start
-      command: name=paver start  chdir={{ geonode_dir }}
-
-
