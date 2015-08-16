@@ -98,8 +98,12 @@
       pip: name=psycopg2 state=present
 
 
-    - name: Creating geonode DB
+    - name: Creating pg geonode user
       postgresql_user: name=geonode password=password role_attr_flags=CREATEDB,NOSUPERUSER
+      sudo_user: postgres
+
+    - name: Creating geonode db
+      postgresql_db: name=geonode owner=geonode
       sudo_user: postgres
 
     - name: Creating geonode-imports db
