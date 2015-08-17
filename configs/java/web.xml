@@ -266,6 +266,6 @@
 
     <context-param>
       <param-name>GEONODE_BASE_URL</param-name>
-      <param-value>http://192.168.1.206/</param-value>
+      <param-value>http://localhost/</param-value>
     </context-param>
 </web-app>
